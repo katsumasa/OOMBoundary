@@ -17,10 +17,21 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 30) {
                     // タイトル
-                    Text("Memory Boundary Tester")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .padding(.top)
+                    HStack {
+                        Text("Memory Boundary Tester")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+
+                        Spacer()
+
+                        NavigationLink(destination: GenerateIconView()) {
+                            Image(systemName: "photo.badge.plus")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .padding(.top)
+                    .padding(.horizontal)
 
                 // 前回のセッション結果（OOMが発生していた場合）
                 if allocator.hasPreviousResults {
