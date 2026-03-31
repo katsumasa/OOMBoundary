@@ -16,6 +16,8 @@ struct MemoryDetails {
     var dirtyMB: Double = 0
     var compressedMB: Double = 0
     var totalMB: Double = 0
+    var availableMemoryMB: Double = 0
+    var absoluteLimitMB: Double = 0
 }
 
 class MemoryAllocator: ObservableObject {
@@ -25,15 +27,27 @@ class MemoryAllocator: ObservableObject {
     @Published var hasEncounteredOOM: Bool = false
     @Published var statusMessage: String = "Ready"
     @Published var memoryDetails: MemoryDetails = MemoryDetails()
+    @Published var memoryWarningThresholdMB: Double = 0
+    @Published var previousSessionMaxMB: Double = 0
+    @Published var hasPreviousResults: Bool = false
 
-    private var memoryChunks: [[UInt8]] = []
+    private var allocatedPointers: [UnsafeMutableRawPointer] = []
     private var timer: Timer?
     private let chunkSizeMB: Int = 10 // 10MBずつ確保
+    private let pageSize: Int = 16384 // 16KB - iOSのページサイズ
     private var memoryWarningObserver: NSObjectProtocol?
+
+    private let kLastFootprintKey = "LastMemoryFootprint"
+    private let kLastAbsoluteLimitKey = "LastAbsoluteLimit"
+    private let kMemoryWarningThresholdKey = "MemoryWarningThreshold"
+    private let kMeasurementInProgressKey = "MeasurementInProgress"
 
     init() {
         // 初期メモリ情報を取得
         memoryDetails = getDetailedMemoryInfo()
+
+        // 前回のセッション結果を確認
+        loadPreviousResults()
     }
 
     func startAllocation() {
@@ -42,6 +56,10 @@ class MemoryAllocator: ObservableObject {
         isRunning = true
         hasEncounteredOOM = false
         statusMessage = "Allocating memory..."
+
+        // 計測開始フラグを保存
+        UserDefaults.standard.set(true, forKey: kMeasurementInProgressKey)
+        UserDefaults.standard.synchronize()
 
         // メモリ警告を監視
         memoryWarningObserver = NotificationCenter.default.addObserver(
@@ -67,24 +85,44 @@ class MemoryAllocator: ObservableObject {
             memoryWarningObserver = nil
         }
 
+        // 計測終了フラグをクリア
+        UserDefaults.standard.removeObject(forKey: kMeasurementInProgressKey)
+        UserDefaults.standard.synchronize()
+
         statusMessage = hasEncounteredOOM ? "OOM Encountered" : "Stopped"
     }
 
     private func handleMemoryWarning() {
+        // メモリ警告時の閾値を記録
+        let currentFootprint = getPhysicalFootprint()
+        let warningThreshold = Double(currentFootprint) / (1024 * 1024)
+        memoryWarningThresholdMB = warningThreshold
+
+        UserDefaults.standard.set(warningThreshold, forKey: kMemoryWarningThresholdKey)
+        UserDefaults.standard.synchronize()
+
         hasEncounteredOOM = true
-        stopAllocation()
-        statusMessage = String(format: "Memory Warning at %.0f MB\nMax: %.0f MB",
-                             allocatedMemoryMB,
-                             maxAllocatedMemoryMB)
-        os_log("Memory warning at %.2f MB", log: .default, type: .error, allocatedMemoryMB)
+
+        os_log("Memory warning at %.2f MB", log: .default, type: .error, warningThreshold)
+
+        statusMessage = String(format: "Memory Warning at %.0f MB\nAbsolute Limit: %.0f MB",
+                             warningThreshold,
+                             memoryDetails.absoluteLimitMB)
     }
 
     func reset() {
         stopAllocation()
-        memoryChunks.removeAll()
+
+        // すべてのポインタを解放
+        for pointer in allocatedPointers {
+            pointer.deallocate()
+        }
+        allocatedPointers.removeAll()
+
         allocatedMemoryMB = 0
         maxAllocatedMemoryMB = 0
         hasEncounteredOOM = false
+        memoryWarningThresholdMB = 0
         statusMessage = "Reset complete"
 
         // メモリ解放を強制
@@ -99,19 +137,29 @@ class MemoryAllocator: ObservableObject {
         }
     }
 
-    func updateMemoryInfo() {
-        memoryDetails = getDetailedMemoryInfo()
-    }
-
     private func allocateMemoryChunk() {
-        let chunkSize = chunkSizeMB * 1024 * 1024 // バイト単位
+        let chunkSizeBytes = chunkSizeMB * 1024 * 1024
 
-        // メモリチャンクを確保
-        let chunk = [UInt8](repeating: 0, count: chunkSize)
-        memoryChunks.append(chunk)
+        // 低レベルなメモリアロケーション
+        let alignment = MemoryLayout<UInt8>.alignment
+        let pointer = UnsafeMutableRawPointer.allocate(
+            byteCount: chunkSizeBytes,
+            alignment: alignment
+        )
+
+        // ランダムデータで埋めてDirty化（メモリ圧縮を回避）
+        let typedPointer = pointer.bindMemory(to: UInt8.self, capacity: chunkSizeBytes)
+
+        // 各16KBページにランダムデータを書き込んでDirty化
+        for offset in stride(from: 0, to: chunkSizeBytes, by: pageSize) {
+            typedPointer[offset] = UInt8.random(in: 0...255)
+        }
+
+        // ポインタを保持（解放されないように）
+        allocatedPointers.append(pointer)
 
         // 確保済みメモリ量を更新
-        allocatedMemoryMB = Double(memoryChunks.count * chunkSizeMB)
+        allocatedMemoryMB = Double(allocatedPointers.count * chunkSizeMB)
 
         if allocatedMemoryMB > maxAllocatedMemoryMB {
             maxAllocatedMemoryMB = allocatedMemoryMB
@@ -120,11 +168,51 @@ class MemoryAllocator: ObservableObject {
         // メモリ詳細情報を更新
         memoryDetails = getDetailedMemoryInfo()
 
-        os_log("Allocated: %.2f MB", log: .default, type: .info, allocatedMemoryMB)
+        // データを永続化（OOMクラッシュに備える）
+        persistCurrentState()
 
-        statusMessage = String(format: "Allocated: %.0f MB\nFootprint: %.0f MB",
+        os_log("Allocated: %.2f MB, Footprint: %.2f MB, Available: %.2f MB, Limit: %.2f MB",
+               log: .default, type: .info,
+               allocatedMemoryMB,
+               memoryDetails.footprintMB,
+               memoryDetails.availableMemoryMB,
+               memoryDetails.absoluteLimitMB)
+
+        statusMessage = String(format: "Allocated: %.0f MB\nFootprint: %.0f MB / %.0f MB\nAvailable: %.0f MB",
                              allocatedMemoryMB,
-                             memoryDetails.footprintMB)
+                             memoryDetails.footprintMB,
+                             memoryDetails.absoluteLimitMB,
+                             memoryDetails.availableMemoryMB)
+
+        // 限界の95%に達したら警告
+        if memoryDetails.availableMemoryMB < memoryDetails.absoluteLimitMB * 0.05 {
+            statusMessage += "\n⚠️ Approaching Memory Limit!"
+        }
+    }
+
+    private func persistCurrentState() {
+        UserDefaults.standard.set(memoryDetails.footprintMB, forKey: kLastFootprintKey)
+        UserDefaults.standard.set(memoryDetails.absoluteLimitMB, forKey: kLastAbsoluteLimitKey)
+        UserDefaults.standard.synchronize()
+    }
+
+    private func loadPreviousResults() {
+        let wasInProgress = UserDefaults.standard.bool(forKey: kMeasurementInProgressKey)
+
+        if wasInProgress {
+            // 前回のセッションでOOMが発生した
+            hasPreviousResults = true
+            previousSessionMaxMB = UserDefaults.standard.double(forKey: kLastFootprintKey)
+            memoryWarningThresholdMB = UserDefaults.standard.double(forKey: kMemoryWarningThresholdKey)
+
+            // フラグをクリア
+            UserDefaults.standard.removeObject(forKey: kMeasurementInProgressKey)
+            UserDefaults.standard.synchronize()
+
+            statusMessage = String(format: "Previous Session:\nMax Memory: %.0f MB\nWarning Threshold: %.0f MB",
+                                 previousSessionMaxMB,
+                                 memoryWarningThresholdMB)
+        }
     }
 
     private func getDetailedMemoryInfo() -> MemoryDetails {
@@ -161,12 +249,45 @@ class MemoryAllocator: ObservableObject {
         // Dirty memory = Internal - Compressed
         let dirtyMB = internalMB - compressedMB
 
+        // os_proc_available_memory()を使用して残存メモリを取得
+        let availableBytes = os_proc_available_memory()
+        let availableMB = Double(availableBytes) / (1024 * 1024)
+
+        // 絶対的限界 = 現在のフットプリント + 利用可能メモリ
+        let absoluteLimitMB = footprintMB + availableMB
+
         return MemoryDetails(
             footprintMB: footprintMB,
             cleanMB: cleanMB,
             dirtyMB: max(0, dirtyMB),
             compressedMB: compressedMB,
-            totalMB: totalMemory
+            totalMB: totalMemory,
+            availableMemoryMB: availableMB,
+            absoluteLimitMB: absoluteLimitMB
         )
+    }
+
+    private func getPhysicalFootprint() -> UInt64 {
+        let TASK_VM_INFO_COUNT = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let TASK_VM_INFO_REV1_COUNT = mach_msg_type_number_t(MemoryLayout.offset(of: \task_vm_info_data_t.min_address)! / MemoryLayout<integer_t>.size)
+
+        var info = task_vm_info_data_t()
+        var count = TASK_VM_INFO_COUNT
+
+        let kr = withUnsafeMutablePointer(to: &info) { infoPtr in
+            infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), intPtr, &count)
+            }
+        }
+
+        guard kr == KERN_SUCCESS, count >= TASK_VM_INFO_REV1_COUNT else {
+            return 0
+        }
+
+        return info.phys_footprint
+    }
+
+    func updateMemoryInfo() {
+        memoryDetails = getDetailedMemoryInfo()
     }
 }

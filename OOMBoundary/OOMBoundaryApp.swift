@@ -9,6 +9,11 @@ import SwiftUI
 
 @main
 struct OOMBoundaryApp: App {
+    init() {
+        // MetricKitレポーターを初期化
+        _ = MetricReporter.shared
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var allocator = MemoryAllocator()
     @State private var updateTimer: Timer?
+    @State private var osPeakMemoryMB: Double?
 
     var body: some View {
         NavigationView {
@@ -21,6 +22,47 @@ struct ContentView: View {
                         .fontWeight(.bold)
                         .padding(.top)
 
+                // 前回のセッション結果（OOMが発生していた場合）
+                if allocator.hasPreviousResults {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("📊 Previous Session Results")
+                            .font(.headline)
+                            .foregroundColor(.purple)
+
+                        MemoryInfoRow(
+                            title: "Max Memory Reached (App)",
+                            value: String(format: "%.0f MB", allocator.previousSessionMaxMB),
+                            color: .red
+                        )
+
+                        if let osPeak = osPeakMemoryMB {
+                            MemoryInfoRow(
+                                title: "Peak Memory (OS Report)",
+                                value: String(format: "%.0f MB", osPeak),
+                                color: .blue
+                            )
+
+                            let difference = abs(allocator.previousSessionMaxMB - osPeak)
+                            let accuracy = 100.0 - (difference / osPeak * 100.0)
+
+                            Text(String(format: "Accuracy: %.1f%%", accuracy))
+                                .font(.caption)
+                                .foregroundColor(accuracy > 95 ? .green : .orange)
+                        }
+
+                        if allocator.memoryWarningThresholdMB > 0 {
+                            MemoryInfoRow(
+                                title: "Warning Threshold",
+                                value: String(format: "%.0f MB", allocator.memoryWarningThresholdMB),
+                                color: .orange
+                            )
+                        }
+                    }
+                    .padding()
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(15)
+                }
+
                 // メモリ情報表示
                 VStack(spacing: 15) {
                     MemoryInfoRow(
@@ -30,19 +72,25 @@ struct ContentView: View {
                     )
 
                     MemoryInfoRow(
-                        title: "Max Memory",
-                        value: String(format: "%.0f MB", allocator.maxAllocatedMemoryMB),
-                        color: .green
-                    )
-
-                    MemoryInfoRow(
                         title: "Memory Footprint",
                         value: String(format: "%.0f MB", allocator.memoryDetails.footprintMB),
                         color: .purple
                     )
 
+                    MemoryInfoRow(
+                        title: "Available Memory",
+                        value: String(format: "%.0f MB", allocator.memoryDetails.availableMemoryMB),
+                        color: .green
+                    )
+
+                    MemoryInfoRow(
+                        title: "Absolute Limit",
+                        value: String(format: "%.0f MB", allocator.memoryDetails.absoluteLimitMB),
+                        color: .red
+                    )
+
                     if allocator.hasEncounteredOOM {
-                        Text("OOM Encountered!")
+                        Text("⚠️ Memory Warning Received!")
                             .font(.headline)
                             .foregroundColor(.red)
                             .padding()
@@ -140,6 +188,9 @@ struct ContentView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
+                // MetricKitからOSのピークメモリを取得
+                osPeakMemoryMB = MetricReporter.shared.getLastPeakMemory()
+
                 // 定期的にメモリ情報を更新
                 updateTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
                     if !allocator.isRunning {
