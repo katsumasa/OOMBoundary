@@ -10,17 +10,31 @@ import Combine
 import UIKit
 import os.log
 
+struct MemoryDetails {
+    var footprintMB: Double = 0
+    var cleanMB: Double = 0
+    var dirtyMB: Double = 0
+    var compressedMB: Double = 0
+    var totalMB: Double = 0
+}
+
 class MemoryAllocator: ObservableObject {
     @Published var allocatedMemoryMB: Double = 0
     @Published var maxAllocatedMemoryMB: Double = 0
     @Published var isRunning: Bool = false
     @Published var hasEncounteredOOM: Bool = false
     @Published var statusMessage: String = "Ready"
+    @Published var memoryDetails: MemoryDetails = MemoryDetails()
 
     private var memoryChunks: [[UInt8]] = []
     private var timer: Timer?
     private let chunkSizeMB: Int = 10 // 10MBずつ確保
     private var memoryWarningObserver: NSObjectProtocol?
+
+    init() {
+        // 初期メモリ情報を取得
+        memoryDetails = getDetailedMemoryInfo()
+    }
 
     func startAllocation() {
         guard !isRunning else { return }
@@ -74,11 +88,19 @@ class MemoryAllocator: ObservableObject {
         statusMessage = "Reset complete"
 
         // メモリ解放を強制
-        DispatchQueue.global(qos: .background).async {
+        DispatchQueue.global(qos: .background).async { [weak self] in
             autoreleasepool {
                 _ = 0
             }
+            // メモリ情報を更新
+            DispatchQueue.main.async {
+                self?.memoryDetails = self?.getDetailedMemoryInfo() ?? MemoryDetails()
+            }
         }
+    }
+
+    func updateMemoryInfo() {
+        memoryDetails = getDetailedMemoryInfo()
     }
 
     private func allocateMemoryChunk() {
@@ -95,38 +117,56 @@ class MemoryAllocator: ObservableObject {
             maxAllocatedMemoryMB = allocatedMemoryMB
         }
 
+        // メモリ詳細情報を更新
+        memoryDetails = getDetailedMemoryInfo()
+
         os_log("Allocated: %.2f MB", log: .default, type: .info, allocatedMemoryMB)
 
-        // システムメモリ情報を取得
-        let memoryInfo = getMemoryInfo()
-        statusMessage = String(format: "Allocated: %.0f MB\nUsed: %.0f MB / %.0f MB",
+        statusMessage = String(format: "Allocated: %.0f MB\nFootprint: %.0f MB",
                              allocatedMemoryMB,
-                             memoryInfo.used,
-                             memoryInfo.total)
+                             memoryDetails.footprintMB)
     }
 
-    private func getMemoryInfo() -> (used: Double, total: Double) {
-        var info = mach_task_basic_info()
-        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size)/4
+    private func getDetailedMemoryInfo() -> MemoryDetails {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size) / 4
 
-        let kerr: kern_return_t = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: integer_t.self, capacity: 1) {
+        let kerr = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
                 task_info(mach_task_self_,
-                         task_flavor_t(MACH_TASK_BASIC_INFO),
+                         task_flavor_t(TASK_VM_INFO),
                          $0,
                          &count)
             }
         }
 
-        if kerr == KERN_SUCCESS {
-            let usedMB = Double(info.resident_size) / (1024 * 1024)
-
-            // デバイスの総メモリを取得
-            let totalMemory = Double(ProcessInfo.processInfo.physicalMemory) / (1024 * 1024)
-
-            return (used: usedMB, total: totalMemory)
+        guard kerr == KERN_SUCCESS else {
+            return MemoryDetails()
         }
 
-        return (used: 0, total: 0)
+        let totalMemory = Double(ProcessInfo.processInfo.physicalMemory) / (1024 * 1024)
+
+        // Memory Footprint (phys_footprint) - アプリが実際に使用しているメモリ
+        let footprintMB = Double(info.phys_footprint) / (1024 * 1024)
+
+        // Internal memory (internal) - Dirty + Compressed
+        let internalMB = Double(info.internal) / (1024 * 1024)
+
+        // Compressed memory
+        let compressedMB = Double(info.compressed) / (1024 * 1024)
+
+        // External memory (external) - Clean memory
+        let cleanMB = Double(info.external) / (1024 * 1024)
+
+        // Dirty memory = Internal - Compressed
+        let dirtyMB = internalMB - compressedMB
+
+        return MemoryDetails(
+            footprintMB: footprintMB,
+            cleanMB: cleanMB,
+            dirtyMB: max(0, dirtyMB),
+            compressedMB: compressedMB,
+            totalMB: totalMemory
+        )
     }
 }
