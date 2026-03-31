@@ -22,6 +22,38 @@ struct ContentView: View {
                         .fontWeight(.bold)
                         .padding(.top)
 
+                // メモリタイプ選択
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Memory Type")
+                        .font(.headline)
+
+                    Picker("Memory Type", selection: $allocator.memoryType) {
+                        ForEach(MemoryType.allCases, id: \.self) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(allocator.isRunning)
+
+                    Text(allocator.memoryType.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    // 説明
+                    if allocator.memoryType == .dirty {
+                        Label("Random data prevents memory compression", systemImage: "shuffle")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    } else {
+                        Label("Zero data may be compressed by iOS", systemImage: "arrow.down.circle")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(15)
+
                 // 前回のセッション結果（OOMが発生していた場合）
                 if allocator.hasPreviousResults {
                     VStack(alignment: .leading, spacing: 10) {

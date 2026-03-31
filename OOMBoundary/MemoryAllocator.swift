@@ -10,6 +10,20 @@ import Combine
 import UIKit
 import os.log
 
+enum MemoryType: String, CaseIterable {
+    case dirty = "Dirty"
+    case clean = "Clean"
+
+    var description: String {
+        switch self {
+        case .dirty:
+            return "Dirty Memory (Random Data)"
+        case .clean:
+            return "Clean Memory (Zero Data)"
+        }
+    }
+}
+
 struct MemoryDetails {
     var footprintMB: Double = 0
     var cleanMB: Double = 0
@@ -30,6 +44,7 @@ class MemoryAllocator: ObservableObject {
     @Published var memoryWarningThresholdMB: Double = 0
     @Published var previousSessionMaxMB: Double = 0
     @Published var hasPreviousResults: Bool = false
+    @Published var memoryType: MemoryType = .dirty
 
     private var allocatedPointers: [UnsafeMutableRawPointer] = []
     private var timer: Timer?
@@ -55,7 +70,7 @@ class MemoryAllocator: ObservableObject {
 
         isRunning = true
         hasEncounteredOOM = false
-        statusMessage = "Allocating memory..."
+        statusMessage = "Allocating \(memoryType.rawValue) memory..."
 
         // 計測開始フラグを保存
         UserDefaults.standard.set(true, forKey: kMeasurementInProgressKey)
@@ -147,12 +162,20 @@ class MemoryAllocator: ObservableObject {
             alignment: alignment
         )
 
-        // ランダムデータで埋めてDirty化（メモリ圧縮を回避）
         let typedPointer = pointer.bindMemory(to: UInt8.self, capacity: chunkSizeBytes)
 
-        // 各16KBページにランダムデータを書き込んでDirty化
-        for offset in stride(from: 0, to: chunkSizeBytes, by: pageSize) {
-            typedPointer[offset] = UInt8.random(in: 0...255)
+        // メモリタイプに応じてデータを書き込む
+        switch memoryType {
+        case .dirty:
+            // ランダムデータで埋めてDirty化（メモリ圧縮を回避）
+            for offset in stride(from: 0, to: chunkSizeBytes, by: pageSize) {
+                typedPointer[offset] = UInt8.random(in: 0...255)
+            }
+
+        case .clean:
+            // 0で初期化（Cleanメモリとして扱われる）
+            // データを書き込まない、またはすべて0にすることで圧縮可能な状態を維持
+            typedPointer.initialize(repeating: 0, count: chunkSizeBytes)
         }
 
         // ポインタを保持（解放されないように）
@@ -171,15 +194,17 @@ class MemoryAllocator: ObservableObject {
         // データを永続化（OOMクラッシュに備える）
         persistCurrentState()
 
-        os_log("Allocated: %.2f MB, Footprint: %.2f MB, Available: %.2f MB, Limit: %.2f MB",
+        os_log("Allocated: %.2f MB (%@), Footprint: %.2f MB, Available: %.2f MB, Limit: %.2f MB",
                log: .default, type: .info,
                allocatedMemoryMB,
+               memoryType.rawValue,
                memoryDetails.footprintMB,
                memoryDetails.availableMemoryMB,
                memoryDetails.absoluteLimitMB)
 
-        statusMessage = String(format: "Allocated: %.0f MB\nFootprint: %.0f MB / %.0f MB\nAvailable: %.0f MB",
+        statusMessage = String(format: "Allocated: %.0f MB (%@)\nFootprint: %.0f MB / %.0f MB\nAvailable: %.0f MB",
                              allocatedMemoryMB,
+                             memoryType.rawValue,
                              memoryDetails.footprintMB,
                              memoryDetails.absoluteLimitMB,
                              memoryDetails.availableMemoryMB)
