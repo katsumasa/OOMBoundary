@@ -22,6 +22,44 @@ struct ContentView: View {
                         .fontWeight(.bold)
                         .padding(.top)
 
+                    // デバイス情報
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "iphone")
+                                .foregroundColor(.blue)
+                            Text("Device Information")
+                                .font(.headline)
+                        }
+
+                        HStack {
+                            Text("Model:")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(getDeviceModel())
+                                .fontWeight(.medium)
+                        }
+
+                        HStack {
+                            Text("Identifier:")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text(getDeviceIdentifier())
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+
+                        HStack {
+                            Text("OS:")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Text("\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
+                                .fontWeight(.medium)
+                        }
+                    }
+                    .padding()
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(15)
+
                 // メモリタイプ選択
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Memory Type")
@@ -296,6 +334,62 @@ struct MemoryBar: View {
             .frame(height: 20)
         }
     }
+}
+
+// デバイス識別子を取得
+func getDeviceIdentifier() -> String {
+    var systemInfo = utsname()
+    uname(&systemInfo)
+    let machineMirror = Mirror(reflecting: systemInfo.machine)
+    let identifier = machineMirror.children.reduce("") { identifier, element in
+        guard let value = element.value as? Int8, value != 0 else { return identifier }
+        return identifier + String(UnicodeScalar(UInt8(value)))
+    }
+    return identifier
+}
+
+// デバイスモデル名を取得
+func getDeviceModel() -> String {
+    let identifier = getDeviceIdentifier()
+
+    // 識別子をわかりやすい名前にマッピング
+    let modelMap: [String: String] = [
+        // iPhone 17シリーズ（仮想マッピング - 実際のデバイスが出たら更新が必要）
+        "iPhone18,1": "iPhone 17",
+        "iPhone18,2": "iPhone 17 Plus",
+        "iPhone18,3": "iPhone 17 Pro",
+        "iPhone18,4": "iPhone 17 Pro Max",
+
+        // iPhone 16シリーズ
+        "iPhone17,3": "iPhone 16 Pro",
+        "iPhone17,4": "iPhone 16 Pro Max",
+        "iPhone17,1": "iPhone 16",
+        "iPhone17,2": "iPhone 16 Plus",
+
+        // iPhone 15シリーズ
+        "iPhone16,2": "iPhone 15 Pro Max",
+        "iPhone16,1": "iPhone 15 Pro",
+        "iPhone15,5": "iPhone 15 Plus",
+        "iPhone15,4": "iPhone 15",
+
+        // iPhone 14シリーズ
+        "iPhone15,3": "iPhone 14 Pro Max",
+        "iPhone15,2": "iPhone 14 Pro",
+        "iPhone14,8": "iPhone 14 Plus",
+        "iPhone14,7": "iPhone 14",
+
+        // iPhone 13シリーズ
+        "iPhone14,3": "iPhone 13 Pro Max",
+        "iPhone14,2": "iPhone 13 Pro",
+        "iPhone14,5": "iPhone 13",
+        "iPhone14,4": "iPhone 13 mini",
+
+        // Simulator
+        "x86_64": "Simulator (x86_64)",
+        "arm64": "Simulator (arm64)"
+    ]
+
+    return modelMap[identifier] ?? "Unknown Device (\(identifier))"
 }
 
 #Preview {
