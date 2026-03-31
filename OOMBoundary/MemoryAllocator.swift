@@ -253,6 +253,14 @@ class MemoryAllocator: ObservableObject {
         let availableBytes = os_proc_available_memory()
         let availableMB = Double(availableBytes) / (1024 * 1024)
 
+        // デバッグ: 値を確認
+        if availableBytes == 0 {
+            os_log("WARNING: os_proc_available_memory() returned 0!", log: .default, type: .error)
+        } else {
+            os_log("os_proc_available_memory() = %llu bytes (%.2f MB)",
+                   log: .default, type: .info, availableBytes, availableMB)
+        }
+
         // 絶対的限界 = 現在のフットプリント + 利用可能メモリ
         let absoluteLimitMB = footprintMB + availableMB
 
