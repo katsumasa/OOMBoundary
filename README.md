@@ -1,8 +1,11 @@
 # OOMBoundary
 
-iOSアプリケーション内で利用可能なメモリの絶対的上限を高精度に計測するツール
+<details open>
+<summary>🇯🇵 日本語</summary>
 
 ## 概要
+
+iOSアプリケーション内で利用可能なメモリの絶対的上限を高精度に計測するツールです。
 
 このアプリは、iOS端末で利用可能なメモリの上限を科学的に測定するために設計された高度なテストツールです。Apple公式のlow-level APIを活用し、メモリを段階的に確保しながら、Out of Memory（OOM）が発生するまでの最大メモリ量を計測します。
 
@@ -84,10 +87,10 @@ Xcodeでプロジェクトを開き、実機またはシミュレーターを選
    - **Dirty**: 正確なOOM限界測定（推奨）
    - **Clean**: メモリ圧縮の挙動観察用
 2. **Start Allocation** ボタンをタップしてメモリ確保を開始
-2. メモリ使用量がリアルタイムで表示されます
-3. `Available Memory`が減少し、限界の95%に到達すると警告が表示されます
-4. メモリ警告（UIApplication.didReceiveMemoryWarning）が発火します
-5. 最終的にアプリがOOMによりクラッシュします（SIGKILL）
+3. メモリ使用量がリアルタイムで表示されます
+4. `Available Memory`が減少し、限界の95%に到達すると警告が表示されます
+5. メモリ警告（UIApplication.didReceiveMemoryWarning）が発火します
+6. 最終的にアプリがOOMによりクラッシュします（SIGKILL）
 
 ### 結果の確認
 1. アプリを再起動します
@@ -168,3 +171,179 @@ Katsumasa Kimura
 ---
 
 **Note**: このツールは、iOSのメモリ管理メカニズムの理解を深め、メモリ集約型アプリケーションの開発に役立てることを目的としています。App Storeへの提出は推奨されません。
+
+</details>
+
+<details>
+<summary>🇺🇸 English</summary>
+
+## Overview
+
+A high-precision tool for measuring the absolute memory limit available to iOS applications.
+
+This app is an advanced testing tool designed to scientifically measure the memory limits of iOS devices. It leverages Apple's official low-level APIs to progressively allocate memory and measure the maximum amount of memory available before an Out of Memory (OOM) event occurs.
+
+## Architecture Features
+
+### 1. High-Precision Memory Allocation
+- **UnsafeMutableRawPointer** for low-level memory control
+- **Random Data Dirtying**: Prevents iOS memory compression and ensures physical RAM consumption
+- **16KB Page Size Optimization**: Optimized for iOS memory page architecture
+
+### 2. Scientific Limit Calculation
+- **phys_footprint API**: Accurate footprint measurement that matches Xcode's memory gauge
+- **os_proc_available_memory()**: Dynamic retrieval of remaining available memory
+- **Absolute Limit Formula**: `Absolute Limit = phys_footprint + os_proc_available_memory()`
+
+### 3. Data Persistence
+- Synchronous UserDefaults saving to survive OOM crashes (SIGKILL)
+- Automatic display of previous session results on app restart
+- Memory warning threshold recording
+
+### 4. MetricKit Integration
+- Peak memory usage verification from the system's perspective
+- Accuracy comparison between app measurements and OS-reported values
+- OOM diagnostic report retrieval
+
+### 5. Increased Memory Limit Entitlement Support
+- Enables extended memory limits on devices with 8GB+ RAM
+- Optimized for high-capacity RAM devices like iPhone 15 Pro and iPhone 16 Pro
+
+## Features
+
+### Memory Type Selection
+- **Dirty Memory**: Writes random data to prevent memory compression
+  - Ensures physical RAM consumption for accurate OOM limit measurement
+  - Recommended for precise OOM threshold testing
+- **Clean Memory**: Initializes with zero data (compressible)
+  - iOS memory compression reduces physical memory consumption
+  - Useful for observing the difference between logical and physical memory usage
+
+### Real-time Display
+- **Allocated Memory**: Amount of memory allocated (selected type)
+- **Memory Footprint**: Actual physical memory usage (phys_footprint)
+- **Available Memory**: Remaining available memory (os_proc_available_memory)
+- **Absolute Limit**: Calculated absolute memory limit
+
+### Memory Type Breakdown
+- **Clean Memory**: Memory that can be reclaimed by the system
+- **Dirty Memory**: Memory in use by the app that cannot be reclaimed
+- **Compressed Memory**: Memory-compressed pages
+
+### Previous Session Results
+- Maximum memory reached before OOM crash
+- Memory warning threshold
+- Accuracy comparison with OS-reported values
+
+## Requirements
+
+- iOS 17.0 or later
+- Xcode 15.0 or later
+- Swift 5.9 or later
+
+## Build Instructions
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/OOMBoundary.git
+cd OOMBoundary
+
+# Open in Xcode
+open OOMBoundary.xcodeproj
+```
+
+Open the project in Xcode, select a physical device or simulator, and run (⌘R).
+
+## Usage
+
+### Initial Measurement
+1. Select **Dirty** or **Clean** under **Memory Type**
+   - **Dirty**: Accurate OOM limit measurement (recommended)
+   - **Clean**: For observing memory compression behavior
+2. Tap **Start Allocation** to begin memory allocation
+3. Memory usage will be displayed in real-time
+4. When `Available Memory` decreases to 95% of the limit, a warning will appear
+5. A memory warning (UIApplication.didReceiveMemoryWarning) will fire
+6. Eventually, the app will crash due to OOM (SIGKILL)
+
+### Viewing Results
+1. Restart the app
+2. The **Previous Session Results** section will display:
+   - **Max Memory Reached (App)**: Maximum memory recorded by the app
+   - **Warning Threshold**: Threshold at which memory warning occurred
+3. After 24 hours, OS-reported values will be retrieved from MetricKit for accuracy verification
+
+### Re-measurement
+1. Tap **Reset** to release memory
+2. Start the measurement again
+
+## Technical Details
+
+### Measurement Reliability
+
+This tool verifies measurements using three independent data sources:
+
+1. **In-App Measurement**: Real-time measurement via `phys_footprint`
+2. **Persisted Data**: Final values saved to UserDefaults just before OOM crash
+3. **MetricKit**: Peak memory usage recorded externally by the OS
+
+The agreement of these three values scientifically validates the measurement accuracy.
+
+### Jetsam Mechanism
+
+iOS's Jetsam daemon terminates apps in the following sequence:
+
+1. Memory pressure detection
+2. Low memory warning dispatch (UIApplicationDidReceiveMemoryWarning)
+3. Priority-based termination of background apps
+4. SIGKILL sent to foreground apps when hard limit is reached
+
+This tool tracks and records the entire process.
+
+### Dirty vs Clean Memory
+
+**Dirty Memory:**
+- Memory pages containing data written by the app
+- No identical data exists on disk
+- Cannot be arbitrarily discarded by the system
+- Ensures physical RAM consumption
+- **Optimal for OOM limit measurement with this tool**
+
+**Clean Memory:**
+- Unwritten or compressible data
+- Can be discarded by the system under memory pressure
+- Memory compression reduces physical memory consumption
+- Logical allocation size differs from physical consumption
+- **Useful for observing memory compression behavior**
+
+## Notes
+
+- **Strongly recommend testing on physical devices**: Simulator results depend on Mac's memory and differ significantly from actual iPhone limits
+- **Intentional crashes**: This app is designed to cause OOM events
+- **Testing purposes only**: This app should be used for development, testing, and research purposes
+- **MetricKit delivery timing**: OS-reported values are delivered 24 hours later
+- **Memory limit variability**: Limits vary depending on iOS version and device state
+
+## References
+
+The implementation of this tool is based on the following official Apple documentation and technical resources:
+
+- [Identifying high-memory use with jetsam event reports](https://developer.apple.com/documentation/xcode/identifying-high-memory-use-with-jetsam-event-reports)
+- [os_proc_available_memory - Apple Developer Documentation](https://developer.apple.com/documentation/os/os_proc_available_memory)
+- [Reducing your app's memory use](https://developer.apple.com/documentation/xcode/reducing-your-app-s-memory-use)
+- [iOS Memory Deep Dive - WWDC18](https://developer.apple.com/videos/play/wwdc2018/416/)
+- [MetricKit - Apple Developer Documentation](https://developer.apple.com/documentation/MetricKit)
+
+## License
+
+MIT License
+
+## Author
+
+Katsumasa Kimura
+
+---
+
+**Note**: This tool is intended to deepen understanding of iOS memory management mechanisms and aid in the development of memory-intensive applications. It is not recommended for App Store submission.
+
+</details>
