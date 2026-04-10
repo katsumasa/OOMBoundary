@@ -83,6 +83,33 @@ git pull origin develop
 3. 変更をコミット（オプション）
 4. Git タグを作成（オプション）
 
+### ステップ 3.5: README.md のバージョンバッジを更新
+
+**重要:** バージョンを更新したら、必ず README.md のバージョンバッジも更新してください。
+
+```bash
+# README.md を編集
+# 3行目のバージョンバッジを更新
+# 例: version-1.2-blue → version-1.3-blue
+sed -i '' 's/version-[0-9]\+\.[0-9]\+-blue/version-1.3-blue/' README.md
+
+# 変更を確認
+git diff README.md
+
+# コミット
+git add README.md
+git commit -m "Update version badge in README to 1.3"
+```
+
+または手動で編集：
+```markdown
+# 変更前
+![Version](https://img.shields.io/badge/version-1.2-blue)
+
+# 変更後
+![Version](https://img.shields.io/badge/version-1.3-blue)
+```
+
 ### ステップ 4: main にマージ
 
 ```bash
@@ -296,15 +323,20 @@ git checkout develop
 ./Scripts/bump-version.sh minor
 # → 対話的にコミット & タグ作成
 
-# 3. main にマージ
+# 3. README.md のバージョンバッジを更新
+sed -i '' 's/version-[0-9]\+\.[0-9]\+-blue/version-1.2-blue/' README.md
+git add README.md
+git commit -m "Update version badge in README to 1.2"
+
+# 4. main にマージ
 git checkout main
 git merge develop
 git push origin main
 
-# 4. タグをプッシュ（GitHub Actions が自動実行）
+# 5. タグをプッシュ（GitHub Actions が自動実行）
 git push origin v1.2.0
 
-# 5. Release を確認
+# 6. Release を確認
 open https://github.com/yourusername/OOMBoundary/releases
 ```
 
@@ -320,6 +352,11 @@ git commit -am "Fix critical bug"
 
 # Version 更新（Patch）
 ./Scripts/bump-version.sh patch
+
+# README.md のバージョンバッジを更新
+sed -i '' 's/version-[0-9]\+\.[0-9]\+-blue/version-1.1.1-blue/' README.md
+git add README.md
+git commit -m "Update version badge in README to 1.1.1"
 
 # main にマージ & タグプッシュ
 git checkout main
@@ -343,6 +380,7 @@ git push origin develop
 - [ ] Soft Mode でビルド成功
 - [ ] Full Mode でビルド成功
 - [ ] README.md が最新
+- [ ] **README.md のバージョンバッジを更新**
 - [ ] CHANGELOG.md を更新（あれば）
 - [ ] Version 番号が適切
 - [ ] Git タグが作成済み

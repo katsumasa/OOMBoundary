@@ -78,6 +78,11 @@ git checkout develop
 # Current Version: 1.1.0
 # New Version:     1.2.0
 # Build:           45 → 46
+
+# 3. README.md のバージョンバッジを更新
+sed -i '' 's/version-[0-9]\+\.[0-9]\+-blue/version-1.2-blue/' README.md
+git add README.md
+git commit -m "Update version badge in README to 1.2"
 ```
 
 ### リリース実行
@@ -198,6 +203,7 @@ git tag -l
 - [ ] Full Mode でビルド成功
 - [ ] README.md が最新
 - [ ] `bump-version.sh` で Version 更新
+- [ ] **README.md のバージョンバッジを更新**
 - [ ] Version 番号が適切（セマンティックバージョニング）
 
 ### リリース時
@@ -296,6 +302,9 @@ xcrun agvtool new-version -all 100
 ```bash
 # Version 更新
 ./Scripts/bump-version.sh [major|minor|patch]
+
+# README.md バッジ更新（バージョン例: 1.2）
+sed -i '' 's/version-[0-9]\+\.[0-9]\+-blue/version-1.2-blue/' README.md
 
 # ビルド
 ./Scripts/build.sh [soft|full] [device|simulator] [debug|release]
