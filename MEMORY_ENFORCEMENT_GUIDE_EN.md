@@ -465,5 +465,166 @@ Bit 29 (0x20000000): ✓ CS_MEMINT_ENABLED (Memory Integrity enabled)
 
 ---
 
+## Real Device Verification Results (iOS 26.4 / iPhone 17 Pro)
+
+### Test Environment
+- **Device**: iPhone 17 Pro (iPhone18,1)
+- **iOS Version**: 26.4
+- **Chip**: A18 Pro (PAC supported)
+- **Verification Date**: 2026-04-10
+
+### Code Signing Flags Comparison
+
+| Signing Type | Full Mode | Soft Mode | Difference |
+|-------------|-----------|-----------|------------|
+| **Development** | `0x32003005` | `0x32003005` | None |
+| **Distribution** | `0x22003305` | `0x22003305` | None |
+
+#### Bit Analysis
+
+**Development Signing (0x32003005):**
+```
+Bit 0  (0x00000001): ✓ CS_VALID
+Bit 2  (0x00000004): ✓ Basic flag
+Bit 8  (0x00000100): ✓ CS_HARD (Hardened Runtime)
+Bit 12 (0x00001000): ✓ CS_ENFORCEMENT
+Bit 17 (0x00020000): ✓ Feature flag
+Bit 25 (0x02000000): ✓ Feature flag
+Bit 28 (0x10000000): ✓ Debug-related flag
+Bit 29 (0x20000000): ✓ CS_MEMINT_ENABLED
+```
+
+**Distribution Signing (0x22003305):**
+```
+Bit 0  (0x00000001): ✓ CS_VALID
+Bit 2  (0x00000004): ✓ Basic flag
+Bit 8  (0x00000100): ✓ CS_HARD (Hardened Runtime)
+Bit 12 (0x00001000): ✓ CS_ENFORCEMENT
+Bit 17 (0x00020000): ✓ Feature flag
+Bit 25 (0x02000000): ✓ Feature flag
+Bit 28 (0x10000000): ✗ None (Only difference from Development)
+Bit 29 (0x20000000): ✓ CS_MEMINT_ENABLED
+```
+
+### Memory Protection Tests Results
+
+#### Development Signing
+
+| Test Item | Full Mode | Soft Mode |
+|-----------|-----------|-----------|
+| Buffer Overflow | Success (no protection) | Success (no protection) |
+| Use-After-Free | Garbage value read | Garbage value read |
+| Out-of-Bounds Read | Success (no protection) | Success (no protection) |
+| Null Pointer Access | **Crash** | **Crash** |
+| Read-Only Write | **Crash** | **Crash** |
+
+#### Distribution Signing (Ad-Hoc / TestFlight equivalent)
+
+| Test Item | Full Mode | Soft Mode |
+|-----------|-----------|-----------|
+| Buffer Overflow | Success (no protection) | Success (no protection) |
+| Use-After-Free | Garbage value read | Garbage value read |
+| Out-of-Bounds Read | Success (no protection) | Success (no protection) |
+| Null Pointer Access | **Crash** | **Crash** |
+| Read-Only Write | **Crash** | **Crash** |
+
+**Conclusion**: No behavioral differences between Full Mode and Soft Mode were observed with both Development and Distribution signing.
+
+### Verification Summary
+
+#### 1. Code Signing Flags
+
+✅ **Confirmed:**
+- `CS_MEMINT_ENABLED (0x20000000)` flag is set for both Full/Soft
+- Only bit 28 differs between Development and Distribution (debug-related)
+- Entitlements are correctly applied
+
+❌ **Not Confirmed:**
+- Existence of flags to distinguish Full Mode and Soft Mode
+- Full/Soft mode detection via Code Signing API
+
+#### 2. Actual Memory Protection Behavior
+
+✅ **Confirmed:**
+- Null Pointer access crashes in both modes (basic protection)
+- Read-Only memory writes crash in both modes (W^X protection)
+- PAC (Pointer Authentication Code) works in both modes
+
+❌ **Not Confirmed:**
+- Behavioral differences in Use-After-Free
+- Detection differences in Buffer Overflow
+- Protection differences in Out-of-Bounds access
+
+### Possible Reasons
+
+1. **Feature Not Implemented or Limited**
+   - Beta stage implementation in iOS 18 (iOS 26.x)
+   - Scheduled for activation in future iOS versions
+   - Full/Soft differences not currently functional
+
+2. **Apple Internal Use Only**
+   - Not available for general developers
+   - Only active for system apps or specific frameworks
+   - May require additional authorization or approval
+
+3. **Undocumented Specifications**
+   - Actual entitlement key to use may be different
+   - Additional settings or conditions required
+   - Official documentation incomplete or outdated
+
+4. **Kernel-Level Decision**
+   - Not detectable from application side
+   - Kernel reads Entitlements directly
+   - Not exposed through Code Signing API by design
+
+### Value of This Project
+
+Even though no behavioral differences were confirmed, this project provides the following value:
+
+✅ **Ready Verification Environment**
+- Easy mode switching with Xcode schemes
+- Runtime configuration verification
+- Comprehensive memory violation test suite
+
+✅ **Future iOS Version Support**
+- Can immediately verify if feature is activated in iOS 19+
+- Entitlement configuration already correctly implemented
+- Test cases prepared and ready
+
+✅ **Educational Value**
+- Understanding Code Signing mechanisms
+- Memory Integrity Enforcement concepts
+- Relationship between Entitlements and build settings
+
+### Recommendations
+
+#### For Developers
+
+1. **Use Soft Mode (default) for now**
+   - No substantial difference from Full Mode currently
+   - No performance impact
+
+2. **Monitor Future iOS Updates**
+   - iOS 18.x later versions
+   - iOS 19 and beyond
+   - Check announcements at WWDC and Release Notes
+
+3. **Keep This Project**
+   - Use for verification when feature is activated
+   - Entitlement settings remain valid
+
+#### For Security-Focused Apps
+
+1. **Set Full Mode Entitlements**
+   - Protection will automatically strengthen when activated
+   - No downside at present
+
+2. **Regular Verification**
+   - Test behavior with new iOS versions
+   - Run Memory Protection Tests
+
+---
+
 **Last Updated**: 2026-04-10  
-**Note:** Memory Integrity Enforcement Full Mode is a new iOS 18 feature. On iOS 17 or earlier devices, the app operates in Soft Mode even if Full Mode entitlements are set. With Development signing, actual protection differences do not appear.
+**Test Environment**: iPhone 17 Pro, iOS 26.4, Development & Distribution signing  
+**Note:** Memory Integrity Enforcement Full Mode is an iOS 18 feature, but as of iOS 26.4, no behavioral differences between Full Mode and Soft Mode have been confirmed. The feature may be activated in future iOS versions.

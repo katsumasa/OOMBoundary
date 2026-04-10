@@ -61,6 +61,7 @@ struct MemoryIntegrityStatus {
     let wxProtectionActive: Bool
     let hasPACSupport: Bool
     let enforcementMode: MemoryIntegrityEnforcementMode
+    let codeSigningFlags: UInt32
     let entitlements: [String: Any]?
 
     var isFullyProtected: Bool {
@@ -112,6 +113,7 @@ final class MemoryIntegrityChecker {
             wxProtectionActive: wxActive,
             hasPACSupport: pacSupported,
             enforcementMode: enforcementMode,
+            codeSigningFlags: codeSigningFlags,
             entitlements: entitlements
         )
     }

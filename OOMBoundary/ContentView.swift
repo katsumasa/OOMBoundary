@@ -283,6 +283,27 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                                 .padding(.top, -4)
 
+                            Divider()
+
+                            // Code Signing Flags
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Active Features")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.secondary)
+
+                                HStack {
+                                    Text("Code Signing Flags:")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text("0x\(String(status.codeSigningFlags, radix: 16, uppercase: true))")
+                                        .font(.system(.caption2, design: .monospaced))
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.primary)
+                                }
+                            }
+
                             #if targetEnvironment(simulator)
                             // Simulator warning
                             HStack(alignment: .top, spacing: 4) {

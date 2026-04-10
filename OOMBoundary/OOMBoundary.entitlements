@@ -4,10 +4,14 @@
 <dict>
 	<key>com.apple.developer.kernel.increased-memory-limit</key>
 	<true/>
-	<!-- Memory Integrity Enforcement - Soft Mode (Default) -->
-	<!-- This is the default mode if not specified -->
+	<!-- Memory Integrity Enforcement - Full Mode (iOS 18+) -->
+	<!-- WARNING: This is experimental and may change in final iOS 18 release -->
 	<key>com.apple.security.memory-integrity-enforcement</key>
-	<string>soft</string>
-	<!-- Alternative: Omit this key entirely for default Soft Mode -->
+	<string>full</string>
+	<!-- Alternative possible keys (based on iOS 18 beta documentation) -->
+	<!--
+	<key>com.apple.developer.memory-integrity-enforcement</key>
+	<string>full</string>
+	-->
 </dict>
 </plist>
