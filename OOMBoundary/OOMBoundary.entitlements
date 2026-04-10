@@ -4,5 +4,10 @@
 <dict>
 	<key>com.apple.developer.kernel.increased-memory-limit</key>
 	<true/>
+	<!-- Memory Integrity Enforcement - Soft Mode (Default) -->
+	<!-- This is the default mode if not specified -->
+	<key>com.apple.security.memory-integrity-enforcement</key>
+	<string>soft</string>
+	<!-- Alternative: Omit this key entirely for default Soft Mode -->
 </dict>
 </plist>

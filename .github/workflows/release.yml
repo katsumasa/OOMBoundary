@@ -1,0 +1,185 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.2.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build OOMBoundary
+    runs-on: macos-14
+    strategy:
+      matrix:
+        mode: [soft, full]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for commit count
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Get version info
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          BUILD_NUMBER=$(git rev-list HEAD --count)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "build=${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+          echo "Build: ${BUILD_NUMBER}"
+
+      - name: Update version numbers
+        run: |
+          xcrun agvtool new-marketing-version "${{ steps.version.outputs.version }}"
+          xcrun agvtool new-version -all "${{ steps.version.outputs.build }}"
+
+      - name: Switch to ${{ matrix.mode }} mode
+        run: |
+          export MEMORY_ENFORCEMENT_MODE=${{ matrix.mode }}
+          chmod +x Scripts/switch-memory-enforcement.sh
+          ./Scripts/switch-memory-enforcement.sh
+
+      - name: Build for iOS Device
+        run: |
+          xcodebuild \
+            -project OOMBoundary.xcodeproj \
+            -scheme OOMBoundary \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "./build/OOMBoundary-${{ matrix.mode }}.xcarchive" \
+            clean archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Export IPA
+        run: |
+          mkdir -p "./build/ipa"
+
+          # Create export options
+          cat > ./build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>compileBitcode</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+
+          # Export
+          xcodebuild \
+            -exportArchive \
+            -archivePath "./build/OOMBoundary-${{ matrix.mode }}.xcarchive" \
+            -exportPath "./build/ipa" \
+            -exportOptionsPlist ./build/ExportOptions.plist || true
+
+          # Rename IPA
+          if [ -f "./build/ipa/OOMBoundary.ipa" ]; then
+            mv "./build/ipa/OOMBoundary.ipa" \
+               "./build/OOMBoundary-${{ steps.version.outputs.version }}-${{ matrix.mode }}.ipa"
+          fi
+
+      - name: Create app package (alternative)
+        if: success() || failure()
+        run: |
+          # If IPA export failed, create a simple package from xcarchive
+          if [ ! -f "./build/OOMBoundary-${{ steps.version.outputs.version }}-${{ matrix.mode }}.ipa" ]; then
+            cd "./build/OOMBoundary-${{ matrix.mode }}.xcarchive/Products/Applications"
+            zip -r "../../../OOMBoundary-${{ steps.version.outputs.version }}-${{ matrix.mode }}.zip" OOMBoundary.app
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OOMBoundary-${{ steps.version.outputs.version }}-${{ matrix.mode }}
+          path: |
+            ./build/OOMBoundary-${{ steps.version.outputs.version }}-${{ matrix.mode }}.ipa
+            ./build/OOMBoundary-${{ steps.version.outputs.version }}-${{ matrix.mode }}.zip
+          if-no-files-found: warn
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create release notes
+        run: |
+          cat > RELEASE_NOTES.md <<EOF
+          # OOMBoundary v${{ steps.version.outputs.version }}
+
+          ## 📦 Downloads
+
+          Choose one based on your security requirements:
+
+          - **Soft Mode** (Default): Standard memory protection, better performance
+          - **Full Mode** (iOS 18+): Maximum memory integrity enforcement, enhanced security
+
+          ## 📱 Installation
+
+          1. Download the appropriate build for your needs
+          2. Install via Xcode or your preferred method
+          3. Trust the developer certificate in Settings
+
+          ## 🔐 Memory Integrity Enforcement
+
+          This release includes both Soft Mode and Full Mode builds:
+
+          - **Soft Mode**: Basic memory protection (recommended for most users)
+          - **Full Mode**: Complete memory integrity enforcement (iOS 18+, security-critical scenarios)
+
+          ## 📝 Changes
+
+          See commit history for detailed changes.
+
+          ---
+
+          Built with ❤️ for iOS memory research
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ./artifacts/**/*.ipa
+            ./artifacts/**/*.zip
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
