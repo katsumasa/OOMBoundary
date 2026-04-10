@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.developer.kernel.increased-memory-limit</key>
+	<true/>
+	<!-- Memory Integrity Enforcement - Full Mode (iOS 18+) -->
+	<!-- WARNING: This is experimental and may change in final iOS 18 release -->
+	<key>com.apple.security.memory-integrity-enforcement</key>
+	<string>full</string>
+	<!-- Alternative possible keys (based on iOS 18 beta documentation) -->
+	<!--
+	<key>com.apple.developer.memory-integrity-enforcement</key>
+	<string>full</string>
+	-->
+</dict>
+</plist>
