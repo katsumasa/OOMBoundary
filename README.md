@@ -6,6 +6,9 @@
 ![Platform](https://img.shields.io/badge/platform-iOS-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+<details>
+<summary>🇯🇵 日本語</summary>
+
 ## 📚 ドキュメント
 
 | ドキュメント | 説明 |
@@ -16,9 +19,6 @@
 | [🔢 Version管理](VERSION_MANAGEMENT.md) | Version/Build番号の管理 |
 | [🔐 Memory Enforcement](MEMORY_ENFORCEMENT_GUIDE.md) | モード切り替え詳細ガイド |
 | [📁 プロジェクト構造](PROJECT_STRUCTURE.md) | ファイル構成の説明 |
-
-<details open>
-<summary>🇯🇵 日本語</summary>
 
 ## 概要
 
