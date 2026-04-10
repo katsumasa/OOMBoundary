@@ -1,0 +1,17 @@
+// Release Build Configuration with Soft Memory Integrity Enforcement
+// This is the default configuration for production builds
+
+// Memory Integrity Enforcement Mode
+MEMORY_ENFORCEMENT_MODE = soft
+
+// Use Soft Mode Entitlements
+CODE_SIGN_ENTITLEMENTS = OOMBoundary/OOMBoundary-Soft.entitlements
+
+// Other Release Settings
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = MEMORY_ENFORCEMENT_SOFT
+GCC_PREPROCESSOR_DEFINITIONS = MEMORY_ENFORCEMENT_SOFT=1
+
+// Product Name (Standard)
+PRODUCT_NAME = $(TARGET_NAME)

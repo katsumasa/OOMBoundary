@@ -1,0 +1,17 @@
+// Release Build Configuration with Full Memory Integrity Enforcement
+// Use this for production builds that require maximum security
+
+// Memory Integrity Enforcement Mode
+MEMORY_ENFORCEMENT_MODE = full
+
+// Use Full Mode Entitlements
+CODE_SIGN_ENTITLEMENTS = OOMBoundary/OOMBoundary-Full.entitlements
+
+// Other Release Settings
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = MEMORY_ENFORCEMENT_FULL
+GCC_PREPROCESSOR_DEFINITIONS = MEMORY_ENFORCEMENT_FULL=1
+
+// Product Name Suffix (Optional - to distinguish builds)
+PRODUCT_NAME = $(TARGET_NAME)-Full

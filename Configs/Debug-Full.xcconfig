@@ -1,0 +1,16 @@
+// Debug Build Configuration with Full Memory Integrity Enforcement
+// This configuration enables the strongest memory protection for debugging
+
+// Memory Integrity Enforcement Mode
+MEMORY_ENFORCEMENT_MODE = full
+
+// Use Full Mode Entitlements
+CODE_SIGN_ENTITLEMENTS = OOMBoundary/OOMBoundary-Full.entitlements
+
+// Other Debug Settings
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG MEMORY_ENFORCEMENT_FULL
+GCC_PREPROCESSOR_DEFINITIONS = DEBUG=1 MEMORY_ENFORCEMENT_FULL=1
+
+// Product Name Suffix (Optional - to distinguish builds)
+PRODUCT_NAME = $(TARGET_NAME)-Full
