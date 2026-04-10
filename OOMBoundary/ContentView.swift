@@ -11,16 +11,48 @@ struct ContentView: View {
     @StateObject private var allocator = MemoryAllocator()
     @State private var updateTimer: Timer?
     @State private var osPeakMemoryMB: Double?
+    @State private var memoryIntegrityStatus: MemoryIntegrityStatus?
+    @State private var buildMode: String = "Unknown"
+    @State private var testResults: [String] = []
+    @State private var isRunningTests: Bool = false
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 30) {
                     // タイトル
-                    Text("Memory Boundary Tester")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .padding(.top)
+                    VStack(spacing: 8) {
+                        Text("Memory Boundary Tester")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+
+                        if let version = getAppVersion() {
+                            Text(version)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        // Build configuration info
+                        HStack(spacing: 4) {
+                            if buildMode.contains("Full Mode") {
+                                Image(systemName: "star.fill")
+                                    .font(.caption2)
+                                    .foregroundColor(.yellow)
+                                Text(buildMode)
+                                    .font(.caption2)
+                                    .foregroundColor(.green)
+                            } else if buildMode.contains("Soft Mode") {
+                                Text(buildMode)
+                                    .font(.caption2)
+                                    .foregroundColor(.orange)
+                            } else {
+                                Text(buildMode)
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    }
+                    .padding(.top)
 
                     // デバイス情報
                     VStack(alignment: .leading, spacing: 8) {
@@ -59,6 +91,272 @@ struct ContentView: View {
                     .padding()
                     .background(Color.blue.opacity(0.1))
                     .cornerRadius(15)
+
+                    // Memory Violation Tests
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "flask")
+                                .foregroundColor(.purple)
+                            Text("Memory Protection Tests")
+                                .font(.headline)
+                        }
+
+                        Text("Test if Full Mode provides stricter memory protection than Soft Mode")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 10) {
+                            Button(action: {
+                                isRunningTests = true
+                                testResults = []
+                                DispatchQueue.global(qos: .userInitiated).async {
+                                    let results = MemoryViolationTester.runSafeTests()
+                                    DispatchQueue.main.async {
+                                        testResults = results
+                                        isRunningTests = false
+                                    }
+                                }
+                            }) {
+                                Label("Safe Tests", systemImage: "checkmark.shield")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.green)
+                                    .cornerRadius(8)
+                            }
+                            .disabled(isRunningTests || allocator.isRunning)
+
+                            Button(action: {
+                                isRunningTests = true
+                                testResults = []
+                                DispatchQueue.global(qos: .userInitiated).async {
+                                    let results = MemoryViolationTester.runAllTests()
+                                    DispatchQueue.main.async {
+                                        testResults = results
+                                        isRunningTests = false
+                                    }
+                                }
+                            }) {
+                                Label("All Tests", systemImage: "exclamationmark.triangle")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.orange)
+                                    .cornerRadius(8)
+                            }
+                            .disabled(isRunningTests || allocator.isRunning)
+
+                            Button(action: {
+                                isRunningTests = true
+                                testResults = []
+                                DispatchQueue.global(qos: .userInitiated).async {
+                                    let results = MemoryViolationTester.runDangerousTests()
+                                    DispatchQueue.main.async {
+                                        testResults = results
+                                        isRunningTests = false
+                                    }
+                                }
+                            }) {
+                                Label("Dangerous", systemImage: "bolt.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.red)
+                                    .cornerRadius(8)
+                            }
+                            .disabled(isRunningTests || allocator.isRunning)
+                        }
+
+                        if isRunningTests {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Running tests...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        if !testResults.isEmpty {
+                            Divider()
+                            Text("Test Results:")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.secondary)
+
+                            ForEach(testResults.indices, id: \.self) { index in
+                                HStack(alignment: .top, spacing: 4) {
+                                    Text("\(index + 1).")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    Text(testResults[index])
+                                        .font(.caption2)
+                                        .foregroundColor(.primary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+
+                        HStack(alignment: .top, spacing: 4) {
+                            Image(systemName: "info.circle")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Test Safety Levels")
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.blue)
+                                Text("• Safe: Non-crashing tests only\n• All: May trigger protection (buffer overflow)\n• Dangerous: Will likely crash (null pointer)")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+                    .padding()
+                    .background(Color.purple.opacity(0.1))
+                    .cornerRadius(15)
+
+                    // Memory Integrity Enforcement
+                    if let status = memoryIntegrityStatus {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "shield.checkered")
+                                    .foregroundColor(.green)
+                                Text("Memory Integrity Enforcement")
+                                    .font(.headline)
+                            }
+
+                            // Build Configuration (Entitlements)
+                            HStack {
+                                Text("Build Configuration:")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                HStack(spacing: 4) {
+                                    if buildMode.contains("Full Mode") {
+                                        Image(systemName: "checkmark.seal.fill")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                        Text("Full Mode Entitlements")
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.green)
+                                    } else if buildMode.contains("Soft Mode") {
+                                        Text("Soft Mode Entitlements")
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.orange)
+                                    }
+                                }
+                            }
+
+                            HStack {
+                                Text("Protection Level:")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(MemoryIntegrityChecker.shared.getProtectionLevel())
+                                    .fontWeight(.bold)
+                                    .foregroundColor(status.isFullyProtected ? .green : .orange)
+                            }
+
+                            HStack {
+                                Text("Runtime Detection:")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                HStack(spacing: 4) {
+                                    Text(status.enforcementMode.description)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(status.enforcementMode == .full ? .green :
+                                                        status.enforcementMode == .soft ? .orange : .gray)
+                                    if #available(iOS 18.0, *), status.enforcementMode == .full {
+                                        Image(systemName: "star.fill")
+                                            .font(.caption2)
+                                            .foregroundColor(.yellow)
+                                    }
+                                }
+                            }
+
+                            Text(status.enforcementMode.detailDescription)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .padding(.top, -4)
+
+                            #if targetEnvironment(simulator)
+                            // Simulator warning
+                            HStack(alignment: .top, spacing: 4) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Simulator Limitation")
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.orange)
+                                    Text("Full enforcement effects require iOS 18+ device with proper code signing. Simulator shows build configuration only.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .padding(.top, 4)
+                            #else
+                            // Real device - explain runtime detection limitations
+                            HStack(alignment: .top, spacing: 4) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Runtime Detection Note")
+                                        .font(.caption2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.blue)
+                                    Text("iOS does not expose Full vs Soft mode distinction through Code Signing APIs. Build Configuration (entitlements) is the source of truth. The actual enforcement happens at OS level.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .padding(.top, 4)
+                            #endif
+
+                            Divider()
+
+                            VStack(alignment: .leading, spacing: 5) {
+                                SecurityStatusRow(title: "Hardened Runtime", isEnabled: status.hasHardenedRuntime)
+                                SecurityStatusRow(title: "Memory Enforcement", isEnabled: status.hasEnforcement)
+                                SecurityStatusRow(title: "W^X Protection", isEnabled: status.wxProtectionActive)
+                                SecurityStatusRow(title: "PAC Support", isEnabled: status.hasPACSupport)
+                                SecurityStatusRow(title: "Library Validation", isEnabled: status.hasLibraryValidation)
+                            }
+                            .font(.caption)
+
+                            if !MemoryIntegrityChecker.shared.getSecurityEntitlements().isEmpty {
+                                Divider()
+
+                                Text("Security Entitlements:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                                ForEach(Array(MemoryIntegrityChecker.shared.getSecurityEntitlements().keys.sorted()), id: \.self) { key in
+                                    if let value = MemoryIntegrityChecker.shared.getSecurityEntitlements()[key] {
+                                        HStack {
+                                            Image(systemName: value ? "checkmark.circle.fill" : "xmark.circle")
+                                                .foregroundColor(value ? .orange : .green)
+                                                .font(.caption2)
+                                            Text(key.replacingOccurrences(of: "com.apple.security.cs.", with: ""))
+                                                .font(.caption2)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding()
+                        .background(Color.green.opacity(0.1))
+                        .cornerRadius(15)
+                    }
 
                 // メモリタイプ選択
                 VStack(alignment: .leading, spacing: 10) {
@@ -260,6 +558,12 @@ struct ContentView: View {
             .onAppear {
                 // MetricKitからOSのピークメモリを取得
                 osPeakMemoryMB = MetricReporter.shared.getLastPeakMemory()
+
+                // Memory Integrityのステータスをチェック
+                memoryIntegrityStatus = MemoryIntegrityChecker.shared.checkMemoryIntegrity()
+
+                // Build Modeを検出
+                buildMode = BuildModeDetector.detectMode()
 
                 // 定期的にメモリ情報を更新
                 updateTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
@@ -537,6 +841,34 @@ func getDeviceModel() -> String {
     ]
 
     return appleDeviceModelMap[identifier] ?? "Unknown Device (\(identifier))"
+}
+
+// アプリのバージョン情報を取得
+func getAppVersion() -> String? {
+    guard let infoDictionary = Bundle.main.infoDictionary else {
+        return nil
+    }
+
+    let version = infoDictionary["CFBundleShortVersionString"] as? String ?? "Unknown"
+    let build = infoDictionary["CFBundleVersion"] as? String ?? "Unknown"
+
+    return "Version \(version) (Build \(build))"
+}
+
+// Security Status Row View
+struct SecurityStatusRow: View {
+    let title: String
+    let isEnabled: Bool
+
+    var body: some View {
+        HStack {
+            Image(systemName: isEnabled ? "checkmark.circle.fill" : "xmark.circle")
+                .foregroundColor(isEnabled ? .green : .red)
+            Text(title)
+                .foregroundColor(.primary)
+            Spacer()
+        }
+    }
 }
 
 #Preview {
